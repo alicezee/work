@@ -8,6 +8,7 @@ import { Audio } from 'expo-av';
 export default function HomeScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [timeouts, setTimeouts] = useState<ReturnType<typeof setTimeout>[]>([]);
   const opacity = useRef(new Animated.Value(0)).current;
   const times = [8540, 9621,10685, 11579, 12579, 13660, 14724, 15618, 16618, 17699, 18763, 19657, 20657, 21738, 22802, 23696, 24696, 25777, 26841, 27735, 28735, 29816, 30880, 31774]; //adjust to fit beatVisual
 
@@ -45,11 +46,19 @@ export default function HomeScreen() {
   }
 
   function executeTimeouts(times: number[]){
+    const timeoutIds: ReturnType<typeof setTimeout>[] = [];
     times.forEach((time: number) => {
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         beatVisual();
       }, time);
+      timeoutIds.push(timeoutId);
     });
+    setTimeouts(timeoutIds);
+  }
+
+  function stopTimeouts(){
+    timeouts.forEach(clearTimeout);
+    setTimeouts([]);
   }
 
   function scoreTracker(){
@@ -71,7 +80,7 @@ export default function HomeScreen() {
               <View style={styles.modalView}> 
                 <Pressable
                   style={[styles.closePopUpPressable]}
-                  onPress={() => [setModalVisible(!modalVisible), stopSound()]}>  
+                  onPress={() => [setModalVisible(!modalVisible), stopSound(), stopTimeouts()]}>  
                     <Text style={styles.closeButtonText}>X</Text>
                 </Pressable>
                 <Pressable
