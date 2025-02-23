@@ -4,19 +4,38 @@ import { Image, StyleSheet, Platform } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { Audio } from 'expo-av';
+import { setBackgroundColorAsync } from 'expo-system-ui';
 
 export default function HomeScreen() {
   const [modalVisible, setModalVisible] = useState(false);
+  const [smallModalVisible, setSmallModalVisible] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [timeouts, setTimeouts] = useState<ReturnType<typeof setTimeout>[]>([]);
+  const [score, setScore] = useState(0);
+  const [money, setMoney] = useState(0);
+  const [aPoints, setaPoints] = useState(2);
+  const beatNum = useRef(-1);
+  const [startTime, setStartTime] = useState<number>(0);
   const opacity = useRef(new Animated.Value(0)).current;
   const times = [8540, 9621,10685, 11579, 12579, 13660, 14724, 15618, 16618, 17699, 18763, 19657, 20657, 21738, 22802, 23696, 24696, 25777, 26841, 27735, 28735, 29816, 30880, 31774]; //adjust to fit beatVisual
+  const beatOffset = 0;
 
   async function playSound(){
     const {sound} = await Audio.Sound.createAsync(
       require('../../assets/audio/Work_game.mp3') 
     );
     setSound(sound);
+    sound.setOnPlaybackStatusUpdate((status) => {
+      if(!status.isLoaded){
+        console.error('not loaded', status);
+        return;
+      }
+      if(status.didJustFinish){
+        setSmallModalVisible(true);
+        stopSound();
+      }
+    });
+    
     await sound.playAsync();
   }
 
@@ -29,15 +48,17 @@ export default function HomeScreen() {
   }
 
   function beatVisual(){
+    beatNum.current += 1; 
+    console.log(beatNum.current);
     Animated.timing(opacity, {
-      toValue: 1, // Fully visible
+      toValue: 1, 
       duration: 100, 
       useNativeDriver: true,
     }).start(() => {
-      // Stay visible for 1 second, then fade out
+
       setTimeout(() => {
         Animated.timing(opacity, {
-          toValue: 0, // Fully invisible
+          toValue: 0, 
           duration: 100,
           useNativeDriver: true,
         }).start();
@@ -47,10 +68,12 @@ export default function HomeScreen() {
 
   function executeTimeouts(times: number[]){
     const timeoutIds: ReturnType<typeof setTimeout>[] = [];
+    setStartTime(Date.now());
+    
     times.forEach((time: number) => {
       const timeoutId = setTimeout(() => {
         beatVisual();
-      }, time);
+      }, time-beatOffset);
       timeoutIds.push(timeoutId);
     });
     setTimeouts(timeoutIds);
@@ -59,12 +82,16 @@ export default function HomeScreen() {
   function stopTimeouts(){
     timeouts.forEach(clearTimeout);
     setTimeouts([]);
+    beatNum.current = -1;
   }
 
-  function scoreTracker(){
-
+  let textLog = '';
+  if (aPoints > 0) {
+    textLog = 'Activity points: ' + aPoints;
+  } else if (aPoints == 0) {
+    textLog = 'Go to sleep!';
   }
-  
+
 
   return (
     <SafeAreaView style={styles.safeAreaContainer}>
@@ -78,9 +105,35 @@ export default function HomeScreen() {
             }}>
             <View style={styles.centeredView}>
               <View style={styles.modalView}> 
+                <Modal
+                  animationType="slide"
+                  transparent={true}
+                  visible={smallModalVisible}
+                  onRequestClose={() => {
+                    setModalVisible(!modalVisible);
+                  }}
+                >
+                  <View style={styles.centeredView}>
+                    <View style={styles.smallModalView}>
+                      <Text>Finished!</Text>
+                      <Pressable
+                        style={styles.closeButton}
+                        onPress={() => {setModalVisible(!modalVisible); 
+                                        setSmallModalVisible(!smallModalVisible); 
+                                        setMoney(current => current+score*15); 
+                                        setScore(0); 
+                                        setaPoints(current => current-1)}}>
+                        <Text style={styles.closeButtonText}>CLOSE</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </Modal>
                 <Pressable
                   style={[styles.closePopUpPressable]}
-                  onPress={() => [setModalVisible(!modalVisible), stopSound(), stopTimeouts()]}>  
+                  onPress={() => {setModalVisible(!modalVisible); 
+                                  stopSound(); 
+                                  stopTimeouts();
+                                  setScore(0)}}>  
                     <Text style={styles.closeButtonText}>X</Text>
                 </Pressable>
                 <Pressable
@@ -89,21 +142,39 @@ export default function HomeScreen() {
                       opacity: pressed ? 0.25 : 0.5,
                     },
                     styles.beatRegion,
-                  ]}>
+                  ]}
+                  onPress={() => {
+                    const pressedTime = Date.now();
+                    if((times[beatNum.current]-500 < pressedTime-startTime) && (pressedTime-startTime< times[beatNum.current]+500) && beatNum.current%4 !=0){
+                      setScore(current => current+1);
+                    }
+                    
+                  }}
+                  delayLongPress={400}
+                  onLongPress={() => {
+                    if(beatNum.current %4 ==0){
+                      setScore(current => current+2)
+                    }
+                  }}>
                 </Pressable>
                 <Animated.Image
                   source={require('@/assets/images/react-logo.png')} 
                   style={[styles.slidingImage, {opacity}]}
                 />
+                <Text>
+                  Score: {score}
+                </Text>
               </View>
             </View>
         </Modal>
         
         <Pressable
           onPress={async () => {
-            setModalVisible(true); //open the modal
-            await playSound(); //play the sound
-            executeTimeouts(times); //start timer
+            if(aPoints>0){
+              setModalVisible(true);
+              await playSound(); 
+              executeTimeouts(times); 
+            } 
           }}
           style={({pressed}) => [
             {
@@ -116,6 +187,8 @@ export default function HomeScreen() {
           </View>
         </Pressable>
         <ThemedText style={styles.text}>Go To Work</ThemedText>
+        <ThemedText style={styles.text}>Money: {money}</ThemedText>
+        <ThemedText style={styles.text}>{textLog}</ThemedText>
 
       </View>
       
@@ -133,12 +206,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 150,
     borderRadius: 10,
     position: "absolute",
-    top: 400,
+    top: 420,
   },
   closeButtonText: {
     color: 'white',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  closeButton: {
+    backgroundColor: 'red',
+    borderRadius: 5,
+    paddingVertical: 5,
+    paddingHorizontal: 30,
+
   },
   centeredView: {
     flex: 1,
@@ -149,8 +229,8 @@ const styles = StyleSheet.create({
     margin: 20,
     backgroundColor: 'white',
     borderRadius: 20,
-    paddingVertical: 325,
-    paddingHorizontal: 175,
+    paddingVertical: 275,
+    paddingHorizontal: 125,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: {
@@ -161,13 +241,30 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
+  smallModalView: {
+    margin: 5,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    paddingVertical: 30,
+    paddingHorizontal: 50,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+    gap: 10, //!!!!!!
+  },
   safeAreaContainer: {
     flex: 1,
   },
   openPopUpPressable: {
     alignItems: "center",
     justifyContent: "center",
-    padding: 10, // Increases touchable area
+    padding: 10,
     borderRadius: 10,
   },
   closePopUpPressable: {
@@ -188,6 +285,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    gap: 10,
   },
   image: {
     width: 150,
@@ -198,4 +296,3 @@ const styles = StyleSheet.create({
     height: 100,
   },
 });
-
