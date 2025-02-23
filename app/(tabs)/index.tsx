@@ -1,5 +1,5 @@
-import React, {Component, useState} from 'react';
-import {TouchableOpacity, Text, View, SafeAreaView, Pressable, Modal} from 'react-native';
+import React, {Component, useEffect, useState, useRef} from 'react';
+import {TouchableOpacity, Text, View, SafeAreaView, Pressable, Modal, Animated} from 'react-native';
 import { Image, StyleSheet, Platform } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -8,15 +8,54 @@ import { Audio } from 'expo-av';
 export default function HomeScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const opacity = useRef(new Animated.Value(0)).current;
+  const times = [8540, 9621,10685, 11579, 12579, 13660, 14724, 15618, 16618, 17699, 18763, 19657, 20657, 21738, 22802, 23696, 24696, 25777, 26841, 27735, 28735, 29816, 30880, 31774]; //adjust to fit beatVisual
 
-  async function playSound() {
-    const { sound } = await Audio.Sound.createAsync(
-      require('../../assets/audio/test.mp3') // Adjust based on your folder structure
-
+  async function playSound(){
+    const {sound} = await Audio.Sound.createAsync(
+      require('../../assets/audio/Work_game.mp3') 
     );
     setSound(sound);
     await sound.playAsync();
   }
+
+  async function stopSound(){
+    if(sound){
+      await sound.stopAsync();
+      await sound.unloadAsync();
+      setSound(null);
+    }
+  }
+
+  function beatVisual(){
+    Animated.timing(opacity, {
+      toValue: 1, // Fully visible
+      duration: 100, 
+      useNativeDriver: true,
+    }).start(() => {
+      // Stay visible for 1 second, then fade out
+      setTimeout(() => {
+        Animated.timing(opacity, {
+          toValue: 0, // Fully invisible
+          duration: 100,
+          useNativeDriver: true,
+        }).start();
+      }, 300);
+    });
+  }
+
+  function executeTimeouts(times: number[]){
+    times.forEach((time: number) => {
+      setTimeout(() => {
+        beatVisual();
+      }, time);
+    });
+  }
+
+  function scoreTracker(){
+
+  }
+  
 
   return (
     <SafeAreaView style={styles.safeAreaContainer}>
@@ -29,10 +68,10 @@ export default function HomeScreen() {
               setModalVisible(!modalVisible);
             }}>
             <View style={styles.centeredView}>
-              <View style={styles.modalView}>
+              <View style={styles.modalView}> 
                 <Pressable
                   style={[styles.closePopUpPressable]}
-                  onPress={() => setModalVisible(!modalVisible)}>
+                  onPress={() => [setModalVisible(!modalVisible), stopSound()]}>  
                     <Text style={styles.closeButtonText}>X</Text>
                 </Pressable>
                 <Pressable
@@ -43,14 +82,19 @@ export default function HomeScreen() {
                     styles.beatRegion,
                   ]}>
                 </Pressable>
+                <Animated.Image
+                  source={require('@/assets/images/react-logo.png')} 
+                  style={[styles.slidingImage, {opacity}]}
+                />
               </View>
             </View>
         </Modal>
         
         <Pressable
           onPress={async () => {
-            setModalVisible(true); // Open the modal
-            await playSound(); // Play the sound
+            setModalVisible(true); //open the modal
+            await playSound(); //play the sound
+            executeTimeouts(times); //start timer
           }}
           style={({pressed}) => [
             {
@@ -139,7 +183,10 @@ const styles = StyleSheet.create({
   image: {
     width: 150,
     height: 150,
-    borderRadius: 10, // Optional rounded corners
+  },
+  slidingImage: {
+    width: 100,
+    height: 100,
   },
 });
 
